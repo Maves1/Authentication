@@ -1,2 +1,4 @@
 venv
 __pycache__
+hmog_public_dataset
+.DS_Store
