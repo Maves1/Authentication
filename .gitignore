@@ -2,3 +2,11 @@ venv
 __pycache__
 hmog_public_dataset
 .DS_Store
+CMakeCache.txt
+CMakeFiles
+Makefile
+cmake_install.cmake
+build/
+RPMS/
+.mb2/
+.vscode/
