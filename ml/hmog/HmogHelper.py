@@ -108,7 +108,7 @@ def preprocess_session_data(session_map: dict):
     add_M(session_map['accelerometer'])
     add_M(session_map['gyroscope'])
 
-def compute_t_min(sensor_data, value_of: str, t_end_timestamp: int, avg100msBefore: float):
+def compute_t_min(sensor_data, value_of: str, t_end_timestamp: int, avg100msBefore: np.float64):
     TIME_AFTER_END_OFFSET = 200  # ms
 
     sensor_data = sensor_data[(sensor_data['sys_time'] >= t_end_timestamp) & (sensor_data['sys_time'] <= t_end_timestamp + TIME_AFTER_END_OFFSET)]
@@ -138,10 +138,9 @@ def compute_t_min(sensor_data, value_of: str, t_end_timestamp: int, avg100msBefo
     return sensor_data.iloc[min_index]['sys_time']
 
 def extract_hmog_for_keypress(sensor_data, key_down_timestamp: int, key_up_timestamp: int, value_of: str):
-    zero_comparison_epsilon = 0.000001
-
     TIME_BEFORE_BOUNDARY = 100  # ms
     TIME_AFTER_BOUNDARY = 100   # ms
+    TIME_AFTER_FOR_T_MIN = 200  # ms
 
     t_max = -1
     max_during = -10000000000
@@ -150,7 +149,7 @@ def extract_hmog_for_keypress(sensor_data, key_down_timestamp: int, key_up_times
     vals_during = []
     vals_after = []
 
-    sensor_data = sensor_data[(sensor_data['sys_time'] >= (key_down_timestamp - TIME_BEFORE_BOUNDARY)) & (sensor_data['sys_time'] <= (key_up_timestamp + TIME_AFTER_BOUNDARY))]
+    sensor_data = sensor_data[(sensor_data['sys_time'] >= (key_down_timestamp - TIME_BEFORE_BOUNDARY)) & (sensor_data['sys_time'] <= (key_up_timestamp + TIME_AFTER_FOR_T_MIN))]
 
     for _, entry in sensor_data.iterrows():
         if entry['sys_time'] >= (key_down_timestamp - TIME_BEFORE_BOUNDARY) and entry['sys_time'] < key_down_timestamp:
@@ -174,13 +173,19 @@ def extract_hmog_for_keypress(sensor_data, key_down_timestamp: int, key_up_times
     #
     # "Grasp Resistance"
     # 1. Mean during taps
-    mean_during = sum(vals_during) / len(vals_during)
+    mean_during = np.mean(vals_during, dtype=np.float64)
+
     # 2. Standard deviation during taps
-    std_deviation_during = ( sum([(x - mean_during) ** 2 for x in vals_during]) / len(vals_during) ) ** 0.5
+    # std_deviation_during = ( sum([(x - mean_during) ** 2 for x in vals_during]) / len(vals_during) ) ** 0.5
+    std_deviation_during = np.std(vals_during, dtype=np.float64)
+
     # 3. avg100msAfter - avg100msBefore
-    avg100msAfter = sum(vals_after) / len(vals_after)
-    avg100msBefore = sum(vals_before) / len(vals_before)
-    # print(f'avg100msBefore: {avg100msBefore}')
+
+    # avg100msAfter = sum(vals_after) / len(vals_after)
+    avg100msAfter = np.mean(vals_after, dtype=np.float64)
+
+    # avg100msBefore = sum(vals_before) / len(vals_before)
+    avg100msBefore = np.mean(vals_before, dtype=np.float64)
 
     diff_readings = avg100msAfter - avg100msBefore
 
@@ -198,22 +203,24 @@ def extract_hmog_for_keypress(sensor_data, key_down_timestamp: int, key_up_times
     # 2
     t_after_center = key_up_timestamp + 50     # ms
     t_before_center = key_down_timestamp - 50  # ms
-    d_duration = (t_after_center - t_before_center) / (avg100msAfter - avg100msBefore)
-    # TODO: temporary solution, fix
-    if (avg100msAfter - avg100msBefore < zero_comparison_epsilon):
+    # TODO: ok?
+    if avg100msAfter - avg100msBefore != 0:
+        d_duration = (t_after_center - t_before_center) / (avg100msAfter - avg100msBefore)
+    else:
         d_duration = 0
 
     # 3
-    d_max_to_avg = (t_after_center - t_max) / (avg100msAfter - max_during)
-    # TODO: temporary solution, fix
-    if (avg100msAfter - max_during < zero_comparison_epsilon):
+    # TODO: ok?
+    if avg100msAfter - max_during != 0:
+        d_max_to_avg = (t_after_center - t_max) / (avg100msAfter - max_during)
+    else:
         d_max_to_avg = 0
 
     return (True, [mean_during, std_deviation_during, diff_readings, net_change, max_change_during,
             time_to_stabilize, d_duration, d_max_to_avg])
 
 # This can be optimised, for now this is coded to present everything as simple as possible
-# value_of: x, y, z, M
+# dims_list: x, y, z, M
 def extract_hmog_features(session_map: dict, sensor_list: list, dims_list: list):
     # "Grasp Resistance" features
 
@@ -221,6 +228,7 @@ def extract_hmog_features(session_map: dict, sensor_list: list, dims_list: list)
     PRESS_TYPE_UP = 0
 
     hmog_vectors = []
+    key_down_timestamps = []
 
     for key_press_event_index in range(len(session_map['key_press_event']) - 1):
         event = session_map['key_press_event'].iloc[key_press_event_index]
@@ -252,9 +260,13 @@ def extract_hmog_features(session_map: dict, sensor_list: list, dims_list: list)
                     break
             
             if key_press_hmog_ext_success:
+                key_down_timestamps.append([event_down_time])
                 hmog_vectors.append(curr_key_press_hmog_vectors)
-
-    return np.array(hmog_vectors).reshape(-1, HMOG_FEATURES_LEN)
+    if len(key_down_timestamps) > 0:
+        hmog_vectors_numpy = np.array(hmog_vectors).reshape(-1, HMOG_FEATURES_LEN)
+        hmog_vectors_numpy = np.concatenate((np.array(key_down_timestamps), hmog_vectors_numpy), axis=1)
+        return (True, hmog_vectors_numpy)
+    return (False, [])
 
 def calc_std_and_scale(user_session_matrix):
     # matrix: (n_samples, n_features)
@@ -269,7 +281,9 @@ def scale_by(user_session_matrix, std_deviation_vector):
 
     result = np.zeros_like(user_session_matrix, dtype=np.float64)
 
-    for i in range(user_session_matrix.shape[1]):
+    result[:, 0] = user_session_matrix[:, 0]
+    # column 0 is a timestamp, we don't want to scale it.
+    for i in range(1, user_session_matrix.shape[1]):
         result[:, i] = user_session_matrix[:, i] / std_deviation_vector[i]
 
     return result
@@ -285,3 +299,27 @@ def test_hmog(session_hmog_vector, correct_key: int, svm):
     else:
         accuracy = 0
     return accuracy
+
+'''
+hmog_vector: must be with a timestamp
+'''
+
+def test_hmog_windowed(hmog_vectors, t_window: int, model):
+    predictions_windowed = []
+
+    curr_window_begin_t = hmog_vectors[0][0]
+    curr_window_begin_i = 0
+
+    hmog_entries_count = hmog_vectors.shape[0]
+    for i in range(1, hmog_entries_count):
+        curr_t = hmog_vectors[i][0]
+        if curr_t - curr_window_begin_t > t_window:
+            if i != curr_window_begin_i:
+                hmog_slice = hmog_vectors[curr_window_begin_i:i, 1:]
+                auth_vector = np.mean(hmog_slice, axis=0).reshape(1, -1)
+
+                predictions_windowed.append(model.decision_function(auth_vector))
+            curr_window_begin_i = i
+            curr_window_begin_t = curr_t
+    
+    return predictions_windowed
