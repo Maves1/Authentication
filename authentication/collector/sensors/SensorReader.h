@@ -20,6 +20,6 @@ public slots:
 signals:
     void readingReady(const QSensorReading *reading);
 
-private:
+protected:
     QSensor *m_sensor;
 };

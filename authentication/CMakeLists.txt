@@ -13,7 +13,10 @@ set(CMAKE_AUTOMOC ON)
 
 set(SOURCES collector/sensors/SensorReader.cpp
 collector/sensors/GyroscopeReader.cpp
-collector/sensors/SensorManager.cpp)
+collector/sensors/AccelerometerReader.cpp
+collector/sensors/SensorManager.cpp
+collector/sensors/filters/GyroscopeRateFilter.cpp
+collector/sensors/filters/AccelerometerRateFilter.cpp)
 
 add_executable(authentication collector/main.cpp ${SOURCES})
 target_link_libraries(authentication

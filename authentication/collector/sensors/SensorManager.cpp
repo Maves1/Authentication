@@ -2,9 +2,11 @@
 #include <QLoggingCategory>
 #include <QSensorReading>
 #include <QGyroscopeReading>
+#include <QAccelerometerReading>
 
 #include "SensorManager.h"
 #include "GyroscopeReader.h"
+#include "AccelerometerReader.h"
 
 Q_LOGGING_CATEGORY(collectorSensorManager, "collector.sensormanager")
 
@@ -14,10 +16,10 @@ SensorManager::SensorManager(QObject *parent) : QObject(parent), m_isReading(fal
 
     // Creating necessary sensor readers
     GyroscopeReader *gyroscopeReader = new GyroscopeReader(this);
-
-    qCDebug(collectorSensorManager) << "gyroscopereader created";
+    AccelerometerReader *accelerometerReader = new AccelerometerReader(this);
 
     this->m_sensorReaders.append(gyroscopeReader);
+    this->m_sensorReaders.append(accelerometerReader);
 
     qCDebug(collectorSensorManager) << "sensorreaders created";
 
@@ -48,6 +50,21 @@ SensorManager::~SensorManager()
 void SensorManager::handleResults(const QSensorReading *reading)
 {
     const QGyroscopeReading *gReading = qobject_cast<const QGyroscopeReading *>(reading);
+    if (gReading)
+    {
+        qCDebug(collectorSensorManager) << gReading->timestamp() / 1000
+                                        << " x: " << gReading->x()
+                                        << " y: " << gReading->y()
+                                        << " z: " << gReading->z();
+        return;
+    }
 
-    qCDebug(collectorSensorManager) << gReading->timestamp() << " x: " << gReading->x() << " y: " << gReading->y() << " z: " << gReading->z();
+    const QAccelerometerReading *aReading = qobject_cast<const QAccelerometerReading *>(reading);
+    if (aReading)
+    {
+        qCDebug(collectorSensorManager) << aReading->timestamp() / 1000
+                                        << " x: " << aReading->x()
+                                        << " y: " << aReading->y()
+                                        << " z: " << aReading->z();
+    }
 }
