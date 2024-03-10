@@ -21,8 +21,9 @@ int main(int argc, char **argv)
 
     int req_frequency = 100; // Hz
     emit manager.startReading();
-
     qCDebug(collector) << "startReading() emitted";
+
+    manager.startRecording();
 
     return application.exec();
 }
