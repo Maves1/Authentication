@@ -1,4 +1,4 @@
-Name:     authentication
+Name:     ru.mavesoft.authentication
 Version:  0.1
 Release:  1
 Summary:  Authentication
@@ -12,6 +12,7 @@ BuildRequires:  pkgconfig(Qt5Core)
 BuildRequires:  pkgconfig(Qt5Qml)
 BuildRequires:  pkgconfig(Qt5Quick)
 BuildRequires:  pkgconfig(Qt5Sensors)
+BuildRequires:  pkgconfig(Qt5Network)
 BuildRequires:  cmake
 
 %description

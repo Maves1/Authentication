@@ -5,6 +5,8 @@
 class AccelerometerRateFilter : public QAccelerometerFilter
 {
 public:
+    AccelerometerRateFilter();
+
     bool filter(QAccelerometerReading *reading) override;
 
     void setSamplingRate(int hz);
@@ -12,6 +14,6 @@ public:
 
 private:
     int m_samplingRate;
-    quint64 m_lastTimestamp = 0;
-    quint64 m_filterLength = 10;
+    quint64 m_lastTimestamp;
+    quint64 m_filterLength;
 };

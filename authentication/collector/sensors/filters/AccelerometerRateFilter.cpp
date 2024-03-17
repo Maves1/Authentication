@@ -1,5 +1,8 @@
 #include "AccelerometerRateFilter.h"
 
+AccelerometerRateFilter::AccelerometerRateFilter() : m_lastTimestamp(0),
+                                                     m_filterLength(10){};
+
 bool AccelerometerRateFilter::filter(QAccelerometerReading *reading)
 {
     quint64 currTimestampMs = reading->timestamp() / 1000;

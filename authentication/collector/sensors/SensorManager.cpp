@@ -5,10 +5,15 @@
 #include <QAccelerometerReading>
 #include <QFile>
 #include <QTimer>
+#include <QDateTime>
 
 #include "SensorManager.h"
 #include "GyroscopeReader.h"
 #include "AccelerometerReader.h"
+#include "keyboard/KeyboardReader.h"
+
+#include <chrono>
+#include <fstream>
 
 Q_LOGGING_CATEGORY(collectorSensorManager, "collector.sensormanager")
 
@@ -22,15 +27,38 @@ namespace
                                     std::to_string(z);
         return QString::fromStdString(stdRowReading);
     }
+
+    qint64 calculateBootTimestamp()
+    {
+        std::chrono::milliseconds uptimeMs(0u);
+        double uptimeSeconds;
+        if (std::ifstream("/proc/uptime", std::ios::in) >> uptimeSeconds)
+        {
+            uptimeMs = std::chrono::milliseconds(
+                static_cast<unsigned long long>(uptimeSeconds * 1000.0));
+
+            qint64 absTimestamp = QDateTime::currentMSecsSinceEpoch();
+
+            return absTimestamp - uptimeMs.count();
+        }
+
+        return 0;
+    }
 }
 
 SensorManager::SensorManager(QObject *parent) : QObject(parent), m_isReading(false), m_recordingMode(false)
 {
     qCDebug(collectorSensorManager) << "ctor";
 
+    // Firstly, let's calculate a boot timestamp
+    m_bootTimestampMs = calculateBootTimestamp();
+
+    qCDebug(collectorSensorManager) << "boot timestamp ms:" << m_bootTimestampMs;
+    qCDebug(collectorSensorManager) << "curr timestamp ms:" << QDateTime::currentMSecsSinceEpoch();
+    qCDebug(collectorSensorManager) << "diff:" << (QDateTime::currentMSecsSinceEpoch() - m_bootTimestampMs);
+
     // Creating necessary sensor readers
-    this->addSensorReader(new GyroscopeReader(this));
-    this->addSensorReader(new AccelerometerReader(this));
+    this->initReaders();
 
     qCDebug(collectorSensorManager) << "sensorreaders created";
 
@@ -53,9 +81,10 @@ bool SensorManager::isRecording()
     return m_recordingMode;
 }
 
-void SensorManager::startRecording()
+void SensorManager::startRecording(int msec)
 {
     m_keyToSensorReadings.clear();
+    m_keyboardReadings.clear();
     m_recordingMode = true;
 
     qCDebug(collectorSensorManager) << "recording started";
@@ -65,7 +94,7 @@ void SensorManager::startRecording()
     QTimer *timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &SensorManager::finishRecording);
 
-    timer->start(10000);
+    timer->start(msec);
 }
 
 void SensorManager::finishRecording()
@@ -73,8 +102,10 @@ void SensorManager::finishRecording()
     m_recordingMode = false;
 
     QString path = "";
-    QString csvHeader = "timestamp,x,y,z";
+    QString sensorsCsvHeader = "timestamp,x,y,z";
+    QString keyboardCsvHeader = "press_time,release_time";
 
+    // Saving sensor readings
     for (auto it = m_keyToSensorReadings.begin(); it != m_keyToSensorReadings.end(); ++it)
     {
         QString filename = path + it.key() + ".csv";
@@ -84,7 +115,7 @@ void SensorManager::finishRecording()
         if (file.open(QIODevice::WriteOnly))
         {
             QTextStream stream(&file);
-            stream << csvHeader << endl;
+            stream << sensorsCsvHeader << endl;
 
             for (QString row : it.value())
             {
@@ -99,10 +130,30 @@ void SensorManager::finishRecording()
         }
     }
 
+    // Saving keyboard readings
+    QString filename = path + "keyboard.csv";
+    QFile file(filename);
+    if (file.open(QIODevice::WriteOnly))
+    {
+        QTextStream stream(&file);
+        stream << keyboardCsvHeader << endl;
+
+        for (QString row : m_keyboardReadings)
+        {
+            stream << row << endl;
+        }
+
+        file.close();
+    }
+    else
+    {
+        qCCritical(collectorSensorManager) << "could not open file for writing!";
+    }
+
     qCDebug(collectorSensorManager) << "Session has been saved successfully!";
 }
 
-void SensorManager::handleResults(const QSensorReading *reading)
+void SensorManager::handleSensorReading(const QSensorReading *reading)
 {
     const QGyroscopeReading *gReading = qobject_cast<const QGyroscopeReading *>(reading);
     if (gReading)
@@ -112,7 +163,7 @@ void SensorManager::handleResults(const QSensorReading *reading)
         if (isRecording())
         {
             m_keyToSensorReadings["gyroscope"].append(csvEntry);
-            qCDebug(collectorSensorManager) << csvEntry;
+            // qCDebug(collectorSensorManager) << csvEntry;
         }
 
         return;
@@ -126,8 +177,19 @@ void SensorManager::handleResults(const QSensorReading *reading)
         if (isRecording())
         {
             m_keyToSensorReadings["accelerometer"].append(csvEntry);
-            qCDebug(collectorSensorManager) << csvEntry;
+            // qCDebug(collectorSensorManager) << csvEntry;
         }
+    }
+}
+
+void SensorManager::handleKeyboardPress(qint64 pressTime, qint64 releaseTime)
+{
+    if (isRecording())
+    {
+        pressTime = pressTime - m_bootTimestampMs;
+        releaseTime = releaseTime - m_bootTimestampMs;
+        qCDebug(collectorSensorManager) << pressTime << releaseTime << (releaseTime - pressTime);
+        m_keyboardReadings.append(QString::number(pressTime) + "," + QString::number(releaseTime));
     }
 }
 
@@ -142,5 +204,16 @@ void SensorManager::addSensorReader(SensorReader *reader)
     // All SensorReaders start reading when SensorManager emits startReading()
     connect(this, &SensorManager::startReading, reader, &SensorReader::startReading);
     // SensorManager processes all readings from SensorReaders
-    connect(reader, &SensorReader::readingReady, this, &SensorManager::handleResults);
+    connect(reader, &SensorReader::readingReady, this, &SensorManager::handleSensorReading);
+}
+
+void SensorManager::initReaders()
+{
+    this->addSensorReader(new GyroscopeReader(this));
+    this->addSensorReader(new AccelerometerReader(this));
+
+    this->m_keyboardReader = new KeyboardReader(this);
+    this->m_keyboardReader->moveToThread(&workerThread);
+    connect(&workerThread, &QThread::finished, this->m_keyboardReader, &QObject::deleteLater);
+    connect(this->m_keyboardReader, &KeyboardReader::keypressReceived, this, &SensorManager::handleKeyboardPress);
 }

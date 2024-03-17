@@ -5,6 +5,8 @@
 class GyroscopeRateFilter : public QGyroscopeFilter
 {
 public:
+    GyroscopeRateFilter();
+
     bool filter(QGyroscopeReading *reading) override;
 
     void setSamplingRate(int hz);
@@ -12,6 +14,6 @@ public:
 
 private:
     int m_samplingRate;
-    quint64 m_lastTimestamp = 0;
-    quint64 m_filterLength = 10;
+    quint64 m_lastTimestamp;
+    quint64 m_filterLength;
 };

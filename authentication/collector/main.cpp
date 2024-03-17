@@ -23,7 +23,8 @@ int main(int argc, char **argv)
     emit manager.startReading();
     qCDebug(collector) << "startReading() emitted";
 
-    manager.startRecording();
+    int recordingTime = 5 * 60 * 1000; // 5 mins in milliseconds
+    manager.startRecording(recordingTime);
 
     return application.exec();
 }

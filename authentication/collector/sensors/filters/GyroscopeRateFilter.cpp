@@ -1,5 +1,8 @@
 #include "GyroscopeRateFilter.h"
 
+GyroscopeRateFilter::GyroscopeRateFilter() : m_lastTimestamp(0),
+                                             m_filterLength(10){};
+
 bool GyroscopeRateFilter::filter(QGyroscopeReading *reading)
 {
     quint64 currTimestampMs = reading->timestamp() / 1000;
