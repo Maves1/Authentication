@@ -162,11 +162,13 @@ void SensorManager::finishRecording()
 
 void SensorManager::startPredicting()
 {
+    qCDebug(collectorSensorManager) << "";
     this->m_isPredicting = true;
 }
 
 void SensorManager::stopPredicting()
 {
+    qCDebug(collectorSensorManager) << "";
     this->m_isPredicting = false;
 }
 
@@ -212,10 +214,10 @@ void SensorManager::handleSensorReading(const QSensorReading *reading)
 
         if (isPredicting())
         {
-            m_authenticator->sendAuthData(static_cast<int>(Authenticator::DataType::Accelerometer), gReading->timestamp() / 1000,
-                                          gReading->x(),
-                                          gReading->y(),
-                                          gReading->z());
+            m_authenticator->sendAuthData(static_cast<int>(Authenticator::DataType::Accelerometer), aReading->timestamp() / 1000,
+                                          aReading->x(),
+                                          aReading->y(),
+                                          aReading->z());
         }
     }
 }

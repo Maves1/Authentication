@@ -35,7 +35,8 @@ int main(int argc, char **argv)
     qCDebug(collector) << "startReading() emitted";
 
     int recordingTime = 7 * 60 * 1000; // 7 mins in milliseconds
-    manager.startRecording(recordingTime);
+    // manager.startRecording(recordingTime);
+    manager.startPredicting();
 
     return application.exec();
 }
