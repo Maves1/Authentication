@@ -11,6 +11,7 @@
 #include "GyroscopeReader.h"
 #include "AccelerometerReader.h"
 #include "keyboard/KeyboardReader.h"
+#include "authenticator/Authenticator.h"
 
 #include <chrono>
 #include <fstream>
@@ -46,7 +47,10 @@ namespace
     }
 }
 
-SensorManager::SensorManager(QObject *parent) : QObject(parent), m_isReading(false), m_recordingMode(false)
+SensorManager::SensorManager(QObject *parent, QString authenticatorAddress) : QObject(parent),
+                                                                              m_isReading(false),
+                                                                              m_recordingMode(false),
+                                                                              m_isPredicting(false)
 {
     qCDebug(collectorSensorManager) << "ctor";
 
@@ -59,6 +63,9 @@ SensorManager::SensorManager(QObject *parent) : QObject(parent), m_isReading(fal
 
     // Creating necessary sensor readers
     this->initReaders();
+
+    // Creating the authenticator
+    this->initAuthenticator(authenticatorAddress);
 
     qCDebug(collectorSensorManager) << "sensorreaders created";
 
@@ -153,6 +160,21 @@ void SensorManager::finishRecording()
     qCDebug(collectorSensorManager) << "Session has been saved successfully!";
 }
 
+void SensorManager::startPredicting()
+{
+    this->m_isPredicting = true;
+}
+
+void SensorManager::stopPredicting()
+{
+    this->m_isPredicting = false;
+}
+
+bool SensorManager::isPredicting()
+{
+    return this->m_isPredicting;
+}
+
 void SensorManager::handleSensorReading(const QSensorReading *reading)
 {
     const QGyroscopeReading *gReading = qobject_cast<const QGyroscopeReading *>(reading);
@@ -164,6 +186,14 @@ void SensorManager::handleSensorReading(const QSensorReading *reading)
         {
             m_keyToSensorReadings["gyroscope"].append(csvEntry);
             // qCDebug(collectorSensorManager) << csvEntry;
+        }
+
+        if (isPredicting())
+        {
+            m_authenticator->sendAuthData(static_cast<int>(Authenticator::DataType::Gyroscope), gReading->timestamp() / 1000,
+                                          gReading->x(),
+                                          gReading->y(),
+                                          gReading->z());
         }
 
         return;
@@ -179,17 +209,31 @@ void SensorManager::handleSensorReading(const QSensorReading *reading)
             m_keyToSensorReadings["accelerometer"].append(csvEntry);
             // qCDebug(collectorSensorManager) << csvEntry;
         }
+
+        if (isPredicting())
+        {
+            m_authenticator->sendAuthData(static_cast<int>(Authenticator::DataType::Accelerometer), gReading->timestamp() / 1000,
+                                          gReading->x(),
+                                          gReading->y(),
+                                          gReading->z());
+        }
     }
 }
 
 void SensorManager::handleKeyboardPress(qint64 pressTime, qint64 releaseTime)
 {
+    pressTime = pressTime - m_bootTimestampMs;
+    releaseTime = releaseTime - m_bootTimestampMs;
+
     if (isRecording())
     {
-        pressTime = pressTime - m_bootTimestampMs;
-        releaseTime = releaseTime - m_bootTimestampMs;
         qCDebug(collectorSensorManager) << pressTime << releaseTime << (releaseTime - pressTime);
         m_keyboardReadings.append(QString::number(pressTime) + "," + QString::number(releaseTime));
+    }
+
+    if (isPredicting())
+    {
+        m_authenticator->sendAuthData(static_cast<int>(Authenticator::DataType::Keyboard), pressTime, releaseTime);
     }
 }
 
@@ -216,4 +260,9 @@ void SensorManager::initReaders()
     this->m_keyboardReader->moveToThread(&workerThread);
     connect(&workerThread, &QThread::finished, this->m_keyboardReader, &QObject::deleteLater);
     connect(this->m_keyboardReader, &KeyboardReader::keypressReceived, this, &SensorManager::handleKeyboardPress);
+}
+
+void SensorManager::initAuthenticator(QString authenticatorAddress)
+{
+    this->m_authenticator = QSharedPointer(new Authenticator(authenticatorAddress));
 }

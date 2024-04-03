@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include <QtCore>
+#include <QString>
 #include <QLoggingCategory>
 
 #include "sensors/SensorManager.h"
@@ -16,7 +17,17 @@ int main(int argc, char **argv)
 
     qCDebug(collector) << "QCoreApplication params set";
 
-    SensorManager manager;
+    QString authenticatorAddress;
+    if (argc == 2)
+    {
+        authenticatorAddress = QString(argv[1]);
+    }
+    else
+    {
+        authenticatorAddress = QString("127.0.0.1");
+    }
+
+    SensorManager manager(nullptr, authenticatorAddress);
     qCDebug(collector) << "SensorManager created";
 
     int req_frequency = 100; // Hz

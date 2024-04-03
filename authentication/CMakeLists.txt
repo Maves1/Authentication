@@ -26,7 +26,9 @@ collector/sensors/AccelerometerReader.cpp
 collector/sensors/SensorManager.cpp
 collector/sensors/filters/GyroscopeRateFilter.cpp
 collector/sensors/filters/AccelerometerRateFilter.cpp
-collector/keyboard/KeyboardReader.cpp)
+collector/keyboard/KeyboardReader.cpp
+collector/authenticator/IAuthenticator.h
+collector/authenticator/Authenticator.cpp)
 
 add_executable(${TARGET} collector/main.cpp ${SOURCES})
 target_link_libraries(${TARGET}
