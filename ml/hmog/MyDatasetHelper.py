@@ -24,6 +24,10 @@ def read_person_session(path_to_session: str):
 def add_M(sensor_data):
     sensor_data['M'] = (sensor_data['x'] ** 2 + sensor_data['y'] ** 2 + sensor_data['z'] ** 2) ** 0.5
 
+# This is used to add walking/sitting label to the whole session dataframe
+def add_type_label(sensor_data, label: int):
+    sensor_data['label'] = label
+
 def preprocess_session_data(session_map: dict):
     # Let's add M = sqrt(x^2 + y^2 + z^2) column to sensors
     add_M(session_map['accelerometer'])
