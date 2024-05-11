@@ -289,36 +289,37 @@ def scale_by(user_session_matrix, std_deviation_vector):
     return result
 
 
+def split_hmog_df_into_windows(df: pd.DataFrame, window_size_ms: int):
+    df_windowed = df.rolling(window=window_size_ms, min_periods=1).mean()
+
 '''
 hmog_vector: must be with a timestamp
 '''
-def test_hmog_windowed(hmog_vectors, t_window_ms: int, model):
-    required_auth_vector_count = 8
-
-    predictions_windowed = []
-
-    curr_window_begin_t = hmog_vectors[0][0]
-    curr_window_begin_i = 0
-
-    hmog_entries_count = hmog_vectors.shape[0]
-    for i in range(1, hmog_entries_count):
-        curr_t = hmog_vectors[i][0]
-
-        while curr_t - curr_window_begin_t > t_window_ms + 1000:
-            curr_window_begin_i += 1
-            curr_window_begin_t = hmog_vectors[curr_window_begin_i][0]
-
-        if i - curr_window_begin_i >= required_auth_vector_count and curr_t - curr_window_begin_t >= t_window_ms:
-            hmog_slice = hmog_vectors[curr_window_begin_i:i, 1:]
-            auth_vector = np.mean(hmog_slice, axis=0).reshape(1, -1)
-
-            predictions_windowed.append(model.decision_function(auth_vector))
-
-        # if i % 1000 == 0:
-        #     print(i)
-        #     print(curr_window_begin_i, curr_window_begin_t, curr_t)
-    
-    return predictions_windowed
+# def get_hmog_windowed_predictions(df_binary, t_window_ms: int, model):
+#     required_auth_vector_count = 8
+#
+#     curr_window_begin_t = hmog_vectors[0][0]
+#     curr_window_begin_i = 0
+#
+#     hmog_entries_count = hmog_vectors.shape[0]
+#     for i in range(1, hmog_entries_count):
+#         curr_t = hmog_vectors[i][0]
+#
+#         while curr_t - curr_window_begin_t > t_window_ms + 1000:
+#             curr_window_begin_i += 1
+#             curr_window_begin_t = hmog_vectors[curr_window_begin_i][0]
+#
+#         if i - curr_window_begin_i >= required_auth_vector_count and curr_t - curr_window_begin_t >= t_window_ms:
+#             hmog_slice = hmog_vectors[curr_window_begin_i:i, 1:]
+#             auth_vector = np.mean(hmog_slice, axis=0).reshape(1, -1)
+#
+#             predictions_windowed.append(model.decision_function(auth_vector))
+#
+#         # if i % 1000 == 0:
+#         #     print(i)
+#         #     print(curr_window_begin_i, curr_window_begin_t, curr_t)
+#
+#     return predictions_windowed
 
 
 '''
@@ -333,6 +334,10 @@ def test_hmog_windowed_split(hmog_vectors, t_window_ms: int, model):
     hmog_entries_count = hmog_vectors.shape[0]
     for i in range(1, hmog_entries_count):
         curr_t = hmog_vectors[i][0]
+        if curr_t < curr_window_begin_t:
+            curr_window_begin_i = i
+            curr_window_begin_t = curr_t
+            continue
         if curr_t - curr_window_begin_t > t_window_ms:
             if i != curr_window_begin_i:
                 hmog_slice = hmog_vectors[curr_window_begin_i:i, 1:]
