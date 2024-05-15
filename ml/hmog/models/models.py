@@ -13,7 +13,7 @@ class SEClassifier:
     def decision_function(self, test_vector):
         assert test_vector.shape[1] == self.mean_vector.shape[0]
 
-        return np.linalg.norm(test_vector - self.mean_vector, axis=1)[0]
+        return np.linalg.norm(test_vector - self.mean_vector, axis=1)
 
 class SMClassifier:
     def __init__(self) -> None:
